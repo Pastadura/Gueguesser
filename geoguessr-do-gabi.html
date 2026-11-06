@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Onde estou? – GeoGuessr por cidade (grátis)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js"></script>
+<style>
+:root{--bg:#14112b;--p1:#241d4f;--p2:#3a2d7a;--y:#fecd19;--g:#6cb928;--ink:#f3f0ff;--mut:#a9a1d6;--line:#4b3f94}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--y);outline-offset:2px}
+a{color:var(--y)}
+#setup,#final{min-height:100%;padding:36px 18px;background:radial-gradient(1200px 600px at 50% -10%,#4a3a9a 0,transparent 60%),var(--bg)}
+.card{max-width:560px;margin:0 auto;background:var(--p1);border:1px solid var(--line);border-radius:18px;padding:28px}
+h1{font-size:2.5rem;font-style:italic;font-weight:800;margin:0 0 6px;letter-spacing:-.02em}
+.mut{color:var(--mut)}
+label{display:block;margin:18px 0 6px;font-weight:700}
+select,input{width:100%;padding:11px 13px;border:2px solid var(--line);border-radius:10px;background:var(--bg)}
+select option{background:var(--bg)}
+.row{display:flex;gap:8px}
+.btn{background:var(--y);color:#1b1540;border:0;border-radius:99px;padding:11px 22px;font-weight:800;font-style:italic}
+.btn:disabled{background:#5a5090;color:#b9b2e6;cursor:not-allowed}
+.btn.go{width:100%;margin-top:22px;padding:15px;font-size:1.1rem}
+.ghost{background:transparent;border:2px solid var(--line);border-radius:99px;padding:8px 18px}
+#chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--p2);border:0;border-radius:99px;padding:5px 12px}
+.chip:hover{background:var(--y);color:#1b1540}
+#results{display:grid;gap:6px;margin-top:10px}
+.opt{text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.opt:hover{border-color:var(--y)}
+#chosen{margin-top:12px;font-weight:700;color:var(--g)}
+#err{color:#ff8a80;min-height:1.2em;margin:10px 0 0}
+small{display:block;margin-top:6px;color:var(--mut)}
+#game{position:fixed;inset:0;background:#000}
+#pano{position:absolute;inset:0}
+#hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;z-index:6;background:var(--p1);border-radius:14px;overflow:hidden;box-shadow:0 6px 24px #0007}
+#hud div{padding:8px 18px;text-align:center;border-right:1px solid var(--line)}
+#hud div:last-child{border:0}
+#hud small{margin:0;font-size:.7rem}
+#hud b{font-size:1.15rem;font-style:italic}
+#quit{position:absolute;top:14px;left:14px;z-index:6;background:var(--p1);border:0;border-radius:99px;padding:9px 16px}
+#back{position:absolute;left:14px;bottom:18px;z-index:6;background:var(--p1);border:0;border-radius:99px;padding:10px 16px}
+#load{position:absolute;inset:0;display:grid;place-items:center;background:var(--bg);font-size:1.2rem;z-index:8;font-style:italic}
+#mini{position:absolute;right:16px;bottom:16px;width:300px;z-index:7;display:flex;flex-direction:column;gap:8px;opacity:.92;transition:width .2s,opacity .2s}
+#mapbox{position:relative;border-radius:14px;overflow:hidden;border:2px solid var(--p2);box-shadow:0 8px 30px #0009}
+#map{height:200px;isolation:isolate;transition:height .2s}
+#mini:hover,#mini.big{width:580px;opacity:1}
+#mini:hover #map,#mini.big #map{height:360px}
+#tg{position:absolute;top:8px;left:8px;z-index:500;background:var(--p1);border:0;border-radius:8px;padding:3px 9px}
+#guess{background:var(--g);color:#fff;border:0;border-radius:99px;padding:13px;font-weight:800;font-style:italic;font-size:1.05rem;text-transform:uppercase}
+#guess:disabled{background:var(--p2);color:var(--mut);cursor:not-allowed;text-transform:none}
+#rb{background:var(--p1);border-radius:14px;padding:12px 16px;text-align:center}
+#rpts{font-size:2rem;font-style:italic}
+.bar{height:10px;border-radius:9px;background:var(--bg);overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:var(--y);border-radius:9px;transition:width .8s}
+#mini.res{width:min(920px,94vw);right:50%;transform:translateX(50%);bottom:auto;top:76px;opacity:1}
+#mini.res #map{height:56vh}
+#mini.res #tg{display:none}
+#tot{font-size:3.2rem;font-style:italic;font-weight:800;margin:6px 0}
+.rr{display:grid;grid-template-columns:5.5rem 1fr 4.5rem;gap:10px;align-items:center;margin:6px 0;font-size:.95rem}
+.chk{display:flex;gap:8px;align-items:center;font-weight:400;margin-top:14px}.chk input{width:auto}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+@media(max-width:640px){#mini{width:190px}#map{height:140px}#mini:hover{width:190px}#mini:hover #map{height:140px}#mini.big{width:92vw}#mini.big #map{height:46vh}h1{font-size:2rem}#hud div{padding:6px 10px}}
+</style>
+</head>
+<body>
+
+<main id="setup">
+ <div class="card">
+  <h1>Onde estou?</h1>
+  <p class="mut">Escolhe um país e uma cidade. As 5 rondas passam-se só nessa zona.</p>
+  <label for="cc">País</label>
+  <select id="cc"></select>
+  <div id="chips" aria-label="Cidades de Portugal"></div>
+  <label for="city">Cidade, vila ou concelho</label>
+  <div class="row"><input id="city" list="ptlist" placeholder="ex.: Alverca do Ribatejo" autocomplete="off"><datalist id="ptlist"></datalist><button id="find" class="btn">Procurar</button></div>
+  <div id="results"></div>
+  <div id="chosen"></div>
+  <label for="sz">Tamanho da zona</label>
+  <select id="sz"><option value="0">Automático (até 12 km)</option><option value="3">Pequena · 3 km</option><option value="8" selected>Média · 8 km</option><option value="20">Grande · 20 km</option></select>
+  <label class="chk"><input type="checkbox" id="any"> Aceitar também fotos normais (sem 360°)</label>
+  <div id="tokbox"><label for="key">Token do Mapillary (grátis)</label>
+  <input id="key" type="password" placeholder="MLY|…" autocomplete="off">
+  <small>Cria-o em <a href="https://www.mapillary.com/dashboard/developers" target="_blank" rel="noopener">mapillary.com/dashboard/developers</a> (Register application → Client Token). Fica guardado só neste browser.</small></div>
+  <button id="go" class="btn go" disabled>Começar</button>
+  <p id="err" role="alert"></p>
+ </div>
+</main>
+
+<section id="game" hidden>
+ <div id="pano"></div>
+ <button id="quit">← Sair</button>
+ <div id="hud"><div><small>Ronda</small><br><b id="rnd"></b></div><div><small>Zona</small><br><b id="zn"></b></div><div><small>Pontos</small><br><b id="sc"></b></div></div>
+ <button id="back" title="Voltar ao ponto inicial">⟲ Ponto inicial</button>
+ <div id="mini">
+  <div id="rb" hidden><b id="rpts"></b><div class="bar"><i id="pfill"></i></div><span id="rd" class="mut"></span></div>
+  <div id="mapbox"><button id="tg" title="Ampliar mapa" aria-label="Ampliar mapa">⤢</button><div id="map"></div></div>
+  <button id="guess" disabled>Coloca o palpite no mapa</button>
+ </div>
+ <div id="load" hidden>A procurar um sítio…</div>
+</section>
+
+<main id="final" hidden>
+ <div class="card">
+  <h1>Resultado</h1>
+  <p class="mut" id="zf"></p>
+  <div id="tot"></div>
+  <div id="rl"></div>
+  <div class="btns">
+   <button id="again" class="btn">Jogar outra vez</button>
+   <button id="change" class="ghost">Mudar de zona</button>
+  </div>
+ </div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rad=x=>x*Math.PI/180;
+const R=5;
+const MLY_TOKEN="MLY|39361706866807425|e88ca08f9f0bcb96a4b930b097283cee"; // cola aqui o teu token do Mapillary (uma só vez): os jogadores deixam de o ver ou inserir
+const ISO="AD AE AF AG AL AM AO AR AT AU AZ BA BB BD BE BF BG BH BI BJ BN BO BR BS BT BW BY BZ CA CD CF CG CH CI CL CM CN CO CR CU CV CY CZ DE DJ DK DM DO DZ EC EE EG ER ES ET FI FJ FR GA GB GE GH GM GN GQ GR GT GW GY HN HR HT HU ID IE IL IN IQ IR IS IT JM JO JP KE KG KH KM KN KP KR KW KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MG MK ML MM MN MR MT MU MV MW MX MY MZ NA NE NG NI NL NO NP NZ OM PA PE PG PH PK PL PT PY QA RO RS RU RW SA SB SC SD SE SG SI SK SL SM SN SO SR SS ST SV SY SZ TD TG TH TJ TL TM TN TR TT TW TZ UA UG US UY UZ VA VC VE VN XK YE ZA ZM ZW".split(" ");
+const PTALL=[...new Set(("Águeda|Albergaria-a-Velha|Anadia|Arouca|Aveiro|Castelo de Paiva|Espinho|Estarreja|Ílhavo|Mealhada|Murtosa|Oliveira de Azeméis|Oliveira do Bairro|Ovar|Santa Maria da Feira|São João da Madeira|Sever do Vouga|Vagos|Vale de Cambra|"+
+"Aljustrel|Almodôvar|Alvito|Barrancos|Beja|Castro Verde|Cuba|Ferreira do Alentejo|Mértola|Moura|Odemira|Ourique|Serpa|Vidigueira|"+
+"Amares|Barcelos|Braga|Cabeceiras de Basto|Celorico de Basto|Esposende|Fafe|Guimarães|Póvoa de Lanhoso|Terras de Bouro|Vieira do Minho|Vila Nova de Famalicão|Vila Verde|Vizela|"+
+"Alfândega da Fé|Bragança|Carrazeda de Ansiães|Freixo de Espada à Cinta|Macedo de Cavaleiros|Miranda do Douro|Mirandela|Mogadouro|Torre de Moncorvo|Vila Flor|Vimioso|Vinhais|"+
+"Belmonte|Castelo Branco|Covilhã|Fundão|Idanha-a-Nova|Oleiros|Penamacor|Proença-a-Nova|Sertã|Vila de Rei|Vila Velha de Ródão|"+
+"Arganil|Cantanhede|Coimbra|Condeixa-a-Nova|Figueira da Foz|Góis|Lousã|Mira|Miranda do Corvo|Montemor-o-Velho|Oliveira do Hospital|Pampilhosa da Serra|Penacova|Penela|Soure|Tábua|Vila Nova de Poiares|"+
+"Alandroal|Arraiolos|Borba|Estremoz|Évora|Montemor-o-Novo|Mora|Mourão|Portel|Redondo|Reguengos de Monsaraz|Vendas Novas|Viana do Alentejo|Vila Viçosa|"+
+"Albufeira|Alcoutim|Aljezur|Castro Marim|Faro|Lagoa, Faro|Lagos|Loulé|Monchique|Olhão|Portimão|São Brás de Alportel|Silves|Tavira|Vila do Bispo|Vila Real de Santo António|"+
+"Aguiar da Beira|Almeida|Celorico da Beira|Figueira de Castelo Rodrigo|Fornos de Algodres|Gouveia|Guarda|Manteigas|Mêda|Pinhel|Sabugal|Seia|Trancoso|Vila Nova de Foz Côa|"+
+"Alcobaça|Alvaiázere|Ansião|Batalha|Bombarral|Caldas da Rainha|Castanheira de Pera|Figueiró dos Vinhos|Leiria|Marinha Grande|Nazaré|Óbidos|Pedrógão Grande|Peniche|Pombal|Porto de Mós|"+
+"Alenquer|Amadora|Arruda dos Vinhos|Azambuja|Cadaval|Cascais|Lisboa|Loures|Lourinhã|Mafra|Odivelas|Oeiras|Sintra|Sobral de Monte Agraço|Torres Vedras|Vila Franca de Xira|"+
+"Alter do Chão|Arronches|Avis|Campo Maior|Castelo de Vide|Crato|Elvas|Fronteira|Gavião|Marvão|Monforte|Nisa|Ponte de Sor|Portalegre|Sousel|"+
+"Amarante|Baião|Felgueiras|Gondomar|Lousada|Maia|Marco de Canaveses|Matosinhos|Paços de Ferreira|Paredes|Penafiel|Porto|Póvoa de Varzim|Santo Tirso|Trofa|Valongo|Vila do Conde|Vila Nova de Gaia|"+
+"Abrantes|Alcanena|Almeirim|Alpiarça|Benavente|Cartaxo|Chamusca|Constância|Coruche|Entroncamento|Ferreira do Zêzere|Golegã|Mação|Ourém|Rio Maior|Salvaterra de Magos|Santarém|Sardoal|Tomar|Torres Novas|Vila Nova da Barquinha|"+
+"Alcácer do Sal|Alcochete|Almada|Barreiro|Grândola|Moita|Montijo|Palmela|Santiago do Cacém|Seixal|Sesimbra|Setúbal|Sines|"+
+"Arcos de Valdevez|Caminha|Melgaço|Monção|Paredes de Coura|Ponte da Barca|Ponte de Lima|Valença|Viana do Castelo|Vila Nova de Cerveira|"+
+"Alijó|Boticas|Chaves|Mesão Frio|Mondim de Basto|Montalegre|Murça|Peso da Régua|Ribeira de Pena|Sabrosa|Santa Marta de Penaguião|Valpaços|Vila Pouca de Aguiar|Vila Real|"+
+"Armamar|Carregal do Sal|Castro Daire|Cinfães|Lamego|Mangualde|Moimenta da Beira|Mortágua|Nelas|Oliveira de Frades|Penalva do Castelo|Penedono|Resende|Santa Comba Dão|São João da Pesqueira|São Pedro do Sul|Sátão|Sernancelhe|Tabuaço|Tarouca|Tondela|Vila Nova de Paiva|Viseu|Vouzela|"+
+"Angra do Heroísmo|Calheta, Açores|Corvo|Horta|Lagoa, Açores|Lajes das Flores|Lajes do Pico|Madalena|Nordeste|Ponta Delgada|Povoação|Praia da Vitória|Ribeira Grande|Santa Cruz da Graciosa|Santa Cruz das Flores|São Roque do Pico|Velas|Vila do Porto|Vila Franca do Campo|"+
+"Calheta, Madeira|Câmara de Lobos|Funchal|Machico|Ponta do Sol|Porto Moniz|Porto Santo|Ribeira Brava|Santa Cruz, Madeira|Santana|São Vicente|"+
+"Alverca do Ribatejo|Póvoa de Santa Iria|Sacavém|Queluz|Algés|Carcavelos|Estoril|Parede|Ericeira|Cacém|Corroios|Amora|Costa da Caparica|Almancil|Quarteira|Vilamoura|Fátima|São Martinho do Porto|Peniche").split("|"))].sort((a,b)=>a.localeCompare(b,"pt"));
+
+const PT=["Lisboa","Alverca do Ribatejo","Porto","Faro","Coimbra","Braga","Funchal","Ponta Delgada","Torres Vedras","Évora","Aveiro","Setúbal","Viseu","Leiria","Guimarães","Sintra","Cascais","Albufeira","Lagos","Viana do Castelo","Tomar"];
+
+/* ---------- Configuração ---------- */
+const names=new Intl.DisplayNames(["pt-PT"],{type:"region"});
+const list=ISO.filter(c=>c!=="PT").map(c=>[c,names.of(c)]).sort((a,b)=>a[1].localeCompare(b[1],"pt"));
+$("#cc").innerHTML=[["PT",names.of("PT")],...list].map(([c,n])=>`<option value="${c}">${esc(n)}</option>`).join("");
+try{$("#key").value=localStorage.getItem("mt")||""}catch{}
+if(MLY_TOKEN)$("#tokbox").hidden=true;
+let zone=null;
+function showChips(){
+ const p=$("#cc").value==="PT";
+ $("#chips").innerHTML=p?PT.map(c=>`<button class="chip" data-c="${c}">${c}</button>`).join(""):"";
+ $("#ptlist").innerHTML=p?PTALL.map(c=>`<option value="${esc(c)}">`).join(""):"";
+}
+showChips();
+function show(id){["setup","game","final"].forEach(i=>$("#"+i).hidden=i!==id)}
+function resetZone(){zone=null;$("#results").innerHTML="";$("#chosen").textContent="";$("#go").disabled=true}
+$("#cc").onchange=()=>{showChips();resetZone()};
+$("#chips").onclick=e=>{const c=e.target.dataset.c;if(c){$("#city").value=c;find(true)}};
+$("#find").onclick=()=>find(false);
+$("#city").onkeydown=e=>{if(e.key==="Enter")find(false)};
+$("#city").onchange=()=>{if($("#cc").value==="PT"&&PTALL.includes($("#city").value.trim()))find(true)};
+function hav(a,b,c,d){const x=rad(c-a),y=rad(d-b),h=Math.sin(x/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)**2;return 12742*Math.asin(Math.sqrt(h))}
+const fmt=d=>d<1?Math.round(d*1000)+" m":d.toFixed(1)+" km";
+
+async function find(auto){
+ const q=$("#city").value.trim();if(!q)return;
+ if($("#cc").value==="PT"&&PTALL.includes(q))auto=true;
+ $("#results").textContent="A procurar…";
+ try{
+  const r=await(await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=pt&countrycodes=${$("#cc").value}&q=${encodeURIComponent(q)}`)).json();
+  if(!r.length){$("#results").textContent="Nada encontrado. Tenta outro nome.";return}
+  if(auto){choose(r[0]);return}
+  $("#results").innerHTML=r.map((x,i)=>`<button class="opt" data-i="${i}">${esc(x.display_name)}</button>`).join("");
+  $("#results").onclick=e=>{const i=e.target.dataset.i;if(i!==undefined)choose(r[i])};
+ }catch{$("#results").textContent="Erro na pesquisa. Verifica a ligação."}
+}
+function choose(x){
+ const [s,n,w,e]=x.boundingbox.map(Number);
+ zone={name:x.display_name.split(",")[0],lat:+x.lat,lng:+x.lon,auto:Math.min(12,Math.max(2,hav(s,w,n,e)/2*.8))};
+ $("#results").innerHTML="";
+ $("#chosen").textContent=`Zona: ${x.display_name}`;
+ $("#go").disabled=false;
+}
+
+/* ---------- Mapillary ---------- */
+let tok="";
+async function api(path){
+ const r=await fetch(`https://graph.mapillary.com/${path}&access_token=${encodeURIComponent(tok)}`);
+ if(!r.ok)throw new Error(r.status);
+ return r.json();
+}
+async function probe(z,wantPano){
+ const a=Math.random()*6.2832,d=z.r*Math.sqrt(Math.random())/111.32;
+ const la=z.lat+d*Math.sin(a),lo=z.lng+d*Math.cos(a)/Math.cos(rad(z.lat)),e=.008;
+ let j;
+ try{j=await api(`images?fields=id,computed_geometry,is_pano,width,height&limit=300${wantPano?"&is_pano=true":""}&bbox=${lo-e},${la-e},${lo+e},${la+e}`)}
+ catch(x){if(["400","401","403"].includes(x.message))throw x;return null}
+ const L=(j.data||[]).filter(i=>i.computed_geometry&&(!wantPano||i.is_pano));
+ if(!L.length)return null;
+ const px=i=>(i.width||0)*(i.height||0);
+ const big=L.filter(i=>px(i)>=(i.is_pano?4e6:2e6)),S=big.length?big:L;
+ const k=S[Math.floor(Math.random()*S.length)],[x,y]=k.computed_geometry.coordinates;
+ return hav(z.lat,z.lng,y,x)<=z.r*1.2?{id:k.id,lat:y,lng:x}:null;
+}
+async function findImg(z){
+ const any=$("#any").checked;
+ for(let b=0;b<10;b++){
+  const r=(await Promise.all(Array.from({length:6},()=>probe(z,!any||b<4)))).filter(Boolean);
+  if(r.length)return r[Math.floor(Math.random()*r.length)];
+ }
+ return null;
+}
+
+/* ---------- Jogo ---------- */
+let map,viewer,viewerTok="",cur,round=0,total=0,res=[],canGuess=false,phase="guess",gM,aM,line;
+const dot=c=>L.divIcon({className:"",html:`<div style="width:18px;height:18px;border-radius:50%;background:${c};border:3px solid #fff;box-shadow:0 1px 6px #0008"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
+const zoomFor=r=>r<=3?14:r<=8?12:11;
+const fix=()=>setTimeout(()=>map&&map.invalidateSize(),260);
+
+$("#go").onclick=()=>{
+ tok=MLY_TOKEN||$("#key").value.trim();
+ if(!tok){$("#err").textContent="Falta o token do Mapillary.";return}
+ try{localStorage.setItem("mt",tok)}catch{}
+ $("#err").textContent="";
+ zone.r=+$("#sz").value||zone.auto;
+ start();
+};
+
+function start(){
+ round=0;total=0;res=[];phase="guess";show("game");
+ if(viewer&&viewerTok!==tok){viewer.remove();viewer=null}
+ if(!map){
+  map=L.map("map",{attributionControl:true});
+  const esri=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors"}).addTo(map);
+  let ok=0,bad=0;
+  esri.on("tileload",()=>ok++);
+  esri.on("tileerror",()=>{if(++bad>=4&&!ok){map.removeLayer(esri);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map)}});
+  map.on("click",e=>{
+   if(!canGuess)return;
+   if(!gM)gM=L.marker(e.latlng,{icon:dot("#fecd19")}).addTo(map);else gM.setLatLng(e.latlng);
+   $("#guess").disabled=false;$("#guess").textContent="Adivinhar";
+  });
+ }
+ $("#zn").textContent=zone.name;
+ nextRound();
+}
+
+async function nextRound(){
+ round++;canGuess=false;phase="guess";
+ $("#load").hidden=false;$("#rb").hidden=true;
+ [gM,aM,line].forEach(o=>o&&o.remove());gM=aM=line=null;
+ $("#mini").className="";
+ $("#guess").disabled=true;$("#guess").textContent="Coloca o palpite no mapa";
+ $("#rnd").textContent=`${round}/${R}`;$("#sc").textContent=total;
+ let img;
+ try{img=await findImg(zone)}catch{
+  $("#load").hidden=true;show("setup");
+  $("#err").textContent="O Mapillary recusou o token. Confirma que copiaste o Client Token completo (começa por MLY|).";return;
+ }
+ $("#load").hidden=true;
+ if(!img){alert("Não encontrei panorâmicas 360° nesta zona. Escolhe o tamanho Grande, outra cidade, ou aceita também fotos normais.");show("setup");return}
+ cur=img;
+ if(!viewer){viewer=new mapillary.Viewer({accessToken:tok,container:"pano",imageId:img.id,component:{cover:false}});viewerTok=tok}
+ else viewer.moveTo(img.id).catch(()=>{});
+ map.setView([zone.lat,zone.lng],zoomFor(zone.r));fix();
+ canGuess=true;
+}
+
+$("#back").onclick=()=>{if(viewer&&cur)viewer.moveTo(cur.id).catch(()=>{})};
+$("#tg").onclick=()=>{$("#mini").classList.toggle("big");fix()};
+$("#mini").onmouseenter=fix;$("#mini").onmouseleave=fix;
+window.addEventListener("resize",()=>viewer&&viewer.resize());
+
+$("#guess").onclick=()=>{
+ if(phase==="res"){round>=R?final():nextRound();return}
+ if(!gM)return;
+ canGuess=false;phase="res";
+ const g=gM.getLatLng(),a=[cur.lat,cur.lng];
+ const d=hav(g.lat,g.lng,a[0],a[1]);
+ const s=Math.round(5000*Math.exp(-d/(zone.r*.6+.3)));
+ total+=s;res.push({d,s});
+ aM=L.marker(a,{icon:dot("#6cb928")}).addTo(map);
+ line=L.polyline([g,a],{color:"#fecd19",weight:3,dashArray:"8 8"}).addTo(map);
+ $("#mini").className="res";
+ $("#rb").hidden=false;
+ $("#rpts").textContent=`+${s} pontos`;
+ $("#rd").textContent=`A ${fmt(d)} do sítio certo`;
+ $("#pfill").style.width="0";setTimeout(()=>$("#pfill").style.width=(s/50)+"%",50);
+ $("#sc").textContent=total;
+ setTimeout(()=>{map.invalidateSize();map.fitBounds(L.latLngBounds([g,a]),{padding:[60,60],maxZoom:17})},260);
+ $("#guess").disabled=false;$("#guess").textContent=round>=R?"Ver resultado":"Próxima ronda";
+};
+
+function final(){
+ show("final");
+ $("#zf").textContent=zone.name;
+ $("#tot").textContent=`${total} / ${R*5000}`;
+ $("#rl").innerHTML=res.map((x,i)=>`<div class="rr"><span>Ronda ${i+1}</span><div class="bar"><i style="width:${x.s/50}%"></i></div><span>${fmt(x.d)}</span></div>`).join("");
+}
+$("#again").onclick=start;
+$("#change").onclick=()=>show("setup");
+$("#quit").onclick=()=>show("setup");
+</script>
+</body>
+</html>
